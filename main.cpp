@@ -90,11 +90,12 @@ std::vector<Team> loadTeams(const std::string& filepath) {
     return teams;
 }
 
-std::string runTournament(std::vector<Team> all_teams, std::mt19937& gen) {
+// 5. TOURNAMENT SIMULATOR (Now returns a pair: {Champion, Runner-Up})
+std::pair<std::string, std::string> runTournament(std::vector<Team> all_teams, std::mt19937& gen) {
     // A. Group Stage Setup
     std::map<std::string, std::vector<Team>> groups;
     for (auto& t : all_teams) {
-        t.points = 0; // Reset points for this iteration
+        t.points = 0; 
         groups[t.group].push_back(t);
     }
 
@@ -112,16 +113,13 @@ std::string runTournament(std::vector<Team> all_teams, std::mt19937& gen) {
             }
         }
         
-        // Sort group by Points, then Elo (tiebreaker)
         std::sort(g_teams.begin(), g_teams.end(), [](const Team& a, const Team& b) {
             if (a.points == b.points) return a.elo > b.elo;
             return a.points > b.points;
         });
 
-        // Top 2 advance automatically
         advancers.push_back(g_teams[0]);
         advancers.push_back(g_teams[1]);
-        // 3rd place goes to the waiting pool
         third_places.push_back(g_teams[2]);
     }
 
@@ -134,7 +132,7 @@ std::string runTournament(std::vector<Team> all_teams, std::mt19937& gen) {
         advancers.push_back(third_places[i]);
     }
 
-    // D. Seed the Knockout Bracket (1 plays 32, 2 plays 31...)
+    // D. Seed the Knockout Bracket
     std::sort(advancers.begin(), advancers.end(), [](const Team& a, const Team& b) {
         if (a.points == b.points) return a.elo > b.elo;
         return a.points > b.points;
@@ -147,19 +145,28 @@ std::string runTournament(std::vector<Team> all_teams, std::mt19937& gen) {
     }
 
     // E. Play Knockout Bracket
+    std::string runner_up = "";
     while (current_round.size() > 1) {
         std::vector<Team> next_round;
         for (size_t i = 0; i < current_round.size(); i += 2) {
             int res = simulateMatch(current_round[i].elo, current_round[i+1].elo, true, gen);
-            if (res == 2) next_round.push_back(current_round[i]);
-            else next_round.push_back(current_round[i+1]);
+            
+            if (res == 2) {
+                next_round.push_back(current_round[i]);
+                // If this is the Final (only 2 teams left), the loser is the runner-up
+                if (current_round.size() == 2) runner_up = current_round[i+1].name;
+            } else {
+                next_round.push_back(current_round[i+1]);
+                if (current_round.size() == 2) runner_up = current_round[i].name;
+            }
         }
         current_round = next_round;
     }
 
-    return current_round[0].name;
+    return {current_round[0].name, runner_up};
 }
 
+// 6. MAIN MONTE CARLO LOOP
 int main() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -170,30 +177,59 @@ int main() {
         return 1;
     }
 
-    int num_simulations = 10000000;
+    int num_simulations = 1000000; // Running 10 Million!
+    
+    // Maps to track both stats
     std::map<std::string, int> championships;
+    std::map<std::string, int> runner_ups;
 
     std::cout << "Simulating " << num_simulations << " World Cups... Please wait.\n";
 
     for (int i = 0; i < num_simulations; ++i) {
-        std::string champion = runTournament(teams, gen);
-        championships[champion]++;
+        std::pair<std::string, std::string> result = runTournament(teams, gen);
+        championships[result.first]++;
+        runner_ups[result.second]++;
+        std::ofstream logFile("convergence_log.csv");
+        logFile << "Iterations,France_Prob\n";
+
+        for (int i = 1; i <= num_simulations; ++i) {
+            std::pair<int, int> result = runTournament(master_groups, gen);
+            championships[result.first]++;
+            
+            // Log the convergence every 50,000 iterations
+            if (i % 50000 == 0) {
+                // Assuming France's integer ID is 34 (you will need to check your mapping)
+                double current_prob = (static_cast<double>(championships[34]) / i) * 100.0;
+                logFile << i << "," << current_prob << "\n";
+            }
+        }
+        logFile.close();
     }
 
-    // Sort and display results
+    // Sort teams by most championships won
     std::vector<std::pair<std::string, int>> results(championships.begin(), championships.end());
     std::sort(results.begin(), results.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
 
-    std::cout << "\n🏆 2026 WORLD CUP WIN PROBABILITIES 🏆\n";
-    std::cout << "----------------------------------------\n";
+    std::cout << "\n🏆 2026 WORLD CUP FINAL PROBABILITIES 🏆\n";
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << std::left << std::setw(18) << "TEAM" 
+              << std::setw(15) << "WIN CHAMPION" 
+              << std::setw(15) << "RUNNER-UP" 
+              << "MAKE FINAL (TOTAL)\n";
+    std::cout << "----------------------------------------------------------------\n";
+
     for (const auto& result : results) {
-        double prob = (static_cast<double>(result.second) / num_simulations) * 100.0;
-        if (prob >= 0.1) { // Only show teams with at least 0.1% chance
-            std::cout << std::left << std::setw(15) << result.first 
-                      << std::fixed << std::setprecision(2) << prob << "%" 
-                      << "  (" << result.second << " wins)\n";
+        double champ_prob = (static_cast<double>(result.second) / num_simulations) * 100.0;
+        double runner_up_prob = (static_cast<double>(runner_ups[result.first]) / num_simulations) * 100.0;
+        double make_final_prob = champ_prob + runner_up_prob;
+
+        if (champ_prob >= 0.1) { // Only show teams with a realistic chance
+            std::cout << std::left << std::setw(18) << result.first 
+                      << std::fixed << std::setprecision(2) << champ_prob << "%" << std::setw(9) << " "
+                      << runner_up_prob << "%" << std::setw(8) << " "
+                      << make_final_prob << "%\n";
         }
     }
 
