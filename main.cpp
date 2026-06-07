@@ -166,6 +166,7 @@ std::pair<std::string, std::string> runTournament(std::vector<Team> all_teams, s
     return {current_round[0].name, runner_up};
 }
 
+// 6. MAIN MONTE CARLO LOOP
 int main() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -178,59 +179,26 @@ int main() {
 
     int num_simulations = 1000000; // 1 Million runs
     
-    // Maps to track both stats
-    std::map<std::string, int> championships;
-    std::map<std::string, int> runner_ups;
+    std::cout << "Simulating " << num_simulations << " World Cups and logging every result...\n";
 
-    std::cout << "Simulating " << num_simulations << " World Cups... Please wait.\n";
+    // --- NEW: OPEN CSV FOR RAW EXPORT ---
+    std::ofstream logFile("simulation_log.csv");
+    logFile << "Iteration,Champion,RunnerUp\n"; // Header row
 
-    for (int i = 0; i < num_simulations; ++i) {
+    for (int i = 1; i <= num_simulations; ++i) {
         std::pair<std::string, std::string> result = runTournament(teams, gen);
-        championships[result.first]++;
-        runner_ups[result.second]++;
-    }
-
-    // Sort teams by most championships won
-    std::vector<std::pair<std::string, int>> results(championships.begin(), championships.end());
-    std::sort(results.begin(), results.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;
-    });
-
-    // --- TERMINAL PRINTOUT ---
-    std::cout << "\n🏆 2026 WORLD CUP FINAL PROBABILITIES 🏆\n";
-    std::cout << "----------------------------------------------------------------\n";
-    std::cout << std::left << std::setw(18) << "TEAM" 
-              << std::setw(15) << "WIN CHAMPION" 
-              << std::setw(15) << "RUNNER-UP" 
-              << "MAKE FINAL (TOTAL)\n";
-    std::cout << "----------------------------------------------------------------\n";
-
-    // --- NEW: OPEN CSV FOR EXPORT ---
-    std::ofstream exportFile("tournament_results.csv");
-    exportFile << "Team,Win_Champion_Prob,Runner_Up_Prob,Make_Final_Prob\n";
-
-    for (const auto& result : results) {
-        double champ_prob = (static_cast<double>(result.second) / num_simulations) * 100.0;
-        double runner_up_prob = (static_cast<double>(runner_ups[result.first]) / num_simulations) * 100.0;
-        double make_final_prob = champ_prob + runner_up_prob;
-
-        // Print to Terminal (Filtered for readability)
-        if (champ_prob >= 0.1) { 
-            std::cout << std::left << std::setw(18) << result.first 
-                      << std::fixed << std::setprecision(2) << champ_prob << "%" << std::setw(9) << " "
-                      << runner_up_prob << "%" << std::setw(8) << " "
-                      << make_final_prob << "%\n";
+        
+        // Log the exact result of this specific simulation
+        logFile << i << "," << result.first << "," << result.second << "\n";
+        
+        // Print a progress tracker to the terminal every 100,000 runs
+        if (i % 100000 == 0) {
+            std::cout << "Completed " << i << " simulations...\n";
         }
-
-        // Write to CSV (Unfiltered, keeping all data and higher precision)
-        exportFile << result.first << "," 
-                   << std::fixed << std::setprecision(4) << champ_prob << "," 
-                   << runner_up_prob << "," 
-                   << make_final_prob << "\n";
     }
 
-    exportFile.close();
-    std::cout << "\nSuccessfully exported all data to 'tournament_results.csv'!\n";
+    logFile.close();
+    std::cout << "\n✅ Successfully exported all 1 million results to 'simulation_log.csv'!\n";
 
     return 0;
 }
