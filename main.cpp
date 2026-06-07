@@ -166,7 +166,6 @@ std::pair<std::string, std::string> runTournament(std::vector<Team> all_teams, s
     return {current_round[0].name, runner_up};
 }
 
-// 6. MAIN MONTE CARLO LOOP
 int main() {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -177,7 +176,7 @@ int main() {
         return 1;
     }
 
-    int num_simulations = 1000000; // Running 10 Million!
+    int num_simulations = 1000000; // 1 Million runs
     
     // Maps to track both stats
     std::map<std::string, int> championships;
@@ -189,21 +188,6 @@ int main() {
         std::pair<std::string, std::string> result = runTournament(teams, gen);
         championships[result.first]++;
         runner_ups[result.second]++;
-        std::ofstream logFile("convergence_log.csv");
-        logFile << "Iterations,France_Prob\n";
-
-        for (int i = 1; i <= num_simulations; ++i) {
-            std::pair<int, int> result = runTournament(master_groups, gen);
-            championships[result.first]++;
-            
-            // Log the convergence every 50,000 iterations
-            if (i % 50000 == 0) {
-                // Assuming France's integer ID is 34 (you will need to check your mapping)
-                double current_prob = (static_cast<double>(championships[34]) / i) * 100.0;
-                logFile << i << "," << current_prob << "\n";
-            }
-        }
-        logFile.close();
     }
 
     // Sort teams by most championships won
@@ -212,6 +196,7 @@ int main() {
         return a.second > b.second;
     });
 
+    // --- TERMINAL PRINTOUT ---
     std::cout << "\n🏆 2026 WORLD CUP FINAL PROBABILITIES 🏆\n";
     std::cout << "----------------------------------------------------------------\n";
     std::cout << std::left << std::setw(18) << "TEAM" 
@@ -220,18 +205,32 @@ int main() {
               << "MAKE FINAL (TOTAL)\n";
     std::cout << "----------------------------------------------------------------\n";
 
+    // --- NEW: OPEN CSV FOR EXPORT ---
+    std::ofstream exportFile("tournament_results.csv");
+    exportFile << "Team,Win_Champion_Prob,Runner_Up_Prob,Make_Final_Prob\n";
+
     for (const auto& result : results) {
         double champ_prob = (static_cast<double>(result.second) / num_simulations) * 100.0;
         double runner_up_prob = (static_cast<double>(runner_ups[result.first]) / num_simulations) * 100.0;
         double make_final_prob = champ_prob + runner_up_prob;
 
-        if (champ_prob >= 0.1) { // Only show teams with a realistic chance
+        // Print to Terminal (Filtered for readability)
+        if (champ_prob >= 0.1) { 
             std::cout << std::left << std::setw(18) << result.first 
                       << std::fixed << std::setprecision(2) << champ_prob << "%" << std::setw(9) << " "
                       << runner_up_prob << "%" << std::setw(8) << " "
                       << make_final_prob << "%\n";
         }
+
+        // Write to CSV (Unfiltered, keeping all data and higher precision)
+        exportFile << result.first << "," 
+                   << std::fixed << std::setprecision(4) << champ_prob << "," 
+                   << runner_up_prob << "," 
+                   << make_final_prob << "\n";
     }
+
+    exportFile.close();
+    std::cout << "\nSuccessfully exported all data to 'tournament_results.csv'!\n";
 
     return 0;
 }
