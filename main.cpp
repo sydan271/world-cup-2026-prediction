@@ -177,7 +177,7 @@ int main() {
         return 1;
     }
 
-    int num_simulations = 1000000; // 1 Million runs
+    int num_simulations = 10000000; // 1 Million runs
     
     // Track stats for the final terminal printout
     std::map<std::string, int> championships;
@@ -199,7 +199,7 @@ int main() {
         championships[result.first]++;
         runner_ups[result.second]++;
         
-        if (i % 100000 == 0) std::cout << "Completed " << i << " simulations...\n";
+        if (i % 1000000 == 0) std::cout << "Completed " << i << " simulations...\n";
     }
 
     logFile.close();
@@ -232,6 +232,6 @@ int main() {
         }
     }
 
-    std::cout << "\n✅ Successfully exported log to 'simulation_log.csv'!\n";
+    std::cout << "\nSuccessfully exported log to 'simulation_log.csv'!\n";
     return 0;
 }
