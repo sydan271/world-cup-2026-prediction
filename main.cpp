@@ -179,26 +179,59 @@ int main() {
 
     int num_simulations = 1000000; // 1 Million runs
     
-    std::cout << "Simulating " << num_simulations << " World Cups and logging every result...\n";
+    // Track stats for the final terminal printout
+    std::map<std::string, int> championships;
+    std::map<std::string, int> runner_ups;
 
-    // --- NEW: OPEN CSV FOR RAW EXPORT ---
+    std::cout << "Simulating " << num_simulations << " World Cups and logging...\n";
+
+    // Open CSV for raw export
     std::ofstream logFile("simulation_log.csv");
-    logFile << "Iteration,Champion,RunnerUp\n"; // Header row
+    logFile << "Iteration,Champion,RunnerUp\n";
 
     for (int i = 1; i <= num_simulations; ++i) {
         std::pair<std::string, std::string> result = runTournament(teams, gen);
         
-        // Log the exact result of this specific simulation
+        // 1. Log the exact result for the Python graph
         logFile << i << "," << result.first << "," << result.second << "\n";
         
-        // Print a progress tracker to the terminal every 100,000 runs
-        if (i % 100000 == 0) {
-            std::cout << "Completed " << i << " simulations...\n";
-        }
+        // 2. Track the totals for the terminal printout
+        championships[result.first]++;
+        runner_ups[result.second]++;
+        
+        if (i % 100000 == 0) std::cout << "Completed " << i << " simulations...\n";
     }
 
     logFile.close();
-    std::cout << "\n✅ Successfully exported all 1 million results to 'simulation_log.csv'!\n";
 
+    // Sort teams by most championships won
+    std::vector<std::pair<std::string, int>> results(championships.begin(), championships.end());
+    std::sort(results.begin(), results.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+
+    // Final Terminal Printout
+    std::cout << "\n🏆 2026 WORLD CUP FINAL PROBABILITIES 🏆\n";
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << std::left << std::setw(18) << "TEAM" 
+              << std::setw(15) << "WIN CHAMPION" 
+              << std::setw(15) << "RUNNER-UP" 
+              << "MAKE FINAL\n";
+    std::cout << "----------------------------------------------------------------\n";
+
+    for (const auto& result : results) {
+        double champ_prob = (static_cast<double>(result.second) / num_simulations) * 100.0;
+        double runner_up_prob = (static_cast<double>(runner_ups[result.first]) / num_simulations) * 100.0;
+        double make_final_prob = champ_prob + runner_up_prob;
+
+        if (champ_prob >= 0.01) { // Show any team that has at least a 0.01% chance
+            std::cout << std::left << std::setw(18) << result.first 
+                      << std::fixed << std::setprecision(3) << champ_prob << "%" << std::setw(8) << " "
+                      << runner_up_prob << "%" << std::setw(7) << " "
+                      << make_final_prob << "%\n";
+        }
+    }
+
+    std::cout << "\n✅ Successfully exported log to 'simulation_log.csv'!\n";
     return 0;
 }
